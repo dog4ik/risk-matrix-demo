@@ -1,49 +1,53 @@
-import { useMemo, useState } from 'react'
-import { evaluate } from 'mahoraga-js'
-import sampleJson from './sample.json?raw'
-import { makeFns } from './fns'
-import { sampleMatrix } from './defaultMarix'
+import { evaluate } from "mahoraga-js";
+import { useMemo, useState } from "react";
+import { sampleMatrix } from "./defaultMarix";
+import { makeFns } from "./fns";
+import sampleJson from "./sample.json?raw";
 
-export type Row = { name: string; expr: string; output: boolean }
+export type Row = { name: string; expr: string; output: boolean };
 
 function run(input: Record<string, unknown>, rows: Row[]) {
-  const ctx = { ...input, ...makeFns(new Date(String(input.currentDateTime))) }
+  const ctx = { ...input, ...makeFns(new Date(String(input.currentDateTime))) };
   // every row's value, visible to later rows as `prev_risks`
-  const risks: Record<string, number> = {}
+  const risks: Record<string, number> = {};
   // only rows marked as output
-  const out: Record<string, number> = {}
-  const errors: Record<number, string> = {}
+  const out: Record<string, number> = {};
+  const errors: Record<number, string> = {};
   rows.forEach((r, i) => {
     try {
-      const v = evaluate(r.expr, { ...ctx, prev_risks: { ...risks } })
-      risks[r.name] = v == null ? 0 : Number(v)
+      const v = evaluate(r.expr, { ...ctx, prev_risks: { ...risks } });
+      risks[r.name] = v == null ? 0 : Number(v);
     } catch (e) {
-      const err = e as Error & { help?: string | null }
-      risks[r.name] = 0
-      errors[i] = `${err.name}: ${err.message}${err.help ? ` (${err.help})` : ''}`
+      const err = e as Error & { help?: string | null };
+      risks[r.name] = 0;
+      errors[i] =
+        `${err.name}: ${err.message}${err.help ? ` (${err.help})` : ""}`;
     }
-    if (r.output) out[r.name] = risks[r.name]
-  })
-  const total = Object.values(out).reduce((a, b) => a + b, 0)
-  return { risks, out, errors, total }
+    if (r.output) out[r.name] = risks[r.name];
+  });
+  const total = Object.values(out).reduce((a, b) => a + b, 0);
+  return { risks, out, errors, total };
 }
 
 export default function App() {
-  const [json, setJson] = useState(sampleJson)
-  const [rows, setRows] = useState(sampleMatrix)
+  const [json, setJson] = useState(sampleJson);
+  const [rows, setRows] = useState(sampleMatrix);
 
   const parsed = useMemo(() => {
     try {
-      return { input: JSON.parse(json), error: null }
+      return { input: JSON.parse(json), error: null };
     } catch (e) {
-      return { input: {}, error: (e as Error).message }
+      return { input: {}, error: (e as Error).message };
     }
-  }, [json])
+  }, [json]);
 
-  const { risks, out, errors, total } = useMemo(() => run(parsed.input, rows), [parsed, rows])
+  const { risks, out, errors, total } = useMemo(
+    () => run(parsed.input, rows),
+    [parsed, rows],
+  );
 
   const update = (i: number, patch: Partial<Row>) =>
-    setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+    setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   return (
     <div className="grid min-h-screen grid-cols-1 gap-4 bg-slate-50 p-4 text-sm text-slate-800 lg:grid-cols-[2fr_1fr] lg:grid-rows-[auto_24rem]">
@@ -51,7 +55,10 @@ export default function App() {
         <h2 className="font-semibold">Matrix</h2>
         <div className="flex flex-col gap-2">
           {rows.map((r, i) => (
-            <div key={i} className="flex items-start gap-3 rounded border border-slate-300 bg-white p-2">
+            <div
+              key={i}
+              className="flex items-start gap-3 rounded border border-slate-300 bg-white p-2"
+            >
               <div className="flex w-56 shrink-0 flex-col gap-1">
                 <input
                   className="rounded border border-slate-300 px-1 py-0.5 font-medium"
@@ -59,7 +66,7 @@ export default function App() {
                   onChange={(e) => update(i, { name: e.target.value })}
                 />
                 <span
-                  className={`font-mono text-lg ${errors[i] || Number.isNaN(risks[r.name]) ? 'text-red-600' : ''}`}
+                  className={`font-mono text-lg ${errors[i] || Number.isNaN(risks[r.name]) ? "text-red-600" : ""}`}
                 >
                   = {String(risks[r.name])}
                 </span>
@@ -71,7 +78,9 @@ export default function App() {
                   onChange={(e) => update(i, { expr: e.target.value })}
                   spellCheck={false}
                 />
-                {errors[i] && <p className="mt-1 text-xs text-red-600">{errors[i]}</p>}
+                {errors[i] && (
+                  <p className="mt-1 text-xs text-red-600">{errors[i]}</p>
+                )}
               </div>
               <input
                 type="checkbox"
@@ -81,6 +90,7 @@ export default function App() {
                 onChange={(e) => update(i, { output: e.target.checked })}
               />
               <button
+                type="button"
                 className="text-slate-400 hover:text-red-600"
                 onClick={() => setRows(rows.filter((_, j) => j !== i))}
               >
@@ -90,8 +100,14 @@ export default function App() {
           ))}
         </div>
         <button
+          type="button"
           className="self-start rounded bg-slate-800 px-3 py-1 text-white hover:bg-slate-700"
-          onClick={() => setRows([...rows, { name: `metric_${rows.length + 1}`, expr: '0', output: true }])}
+          onClick={() =>
+            setRows([
+              ...rows,
+              { name: `metric_${rows.length + 1}`, expr: "0", output: true },
+            ])
+          }
         >
           Add row
         </button>
@@ -119,5 +135,5 @@ export default function App() {
         </pre>
       </section>
     </div>
-  )
+  );
 }
