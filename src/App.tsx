@@ -1,22 +1,16 @@
-import Editor from "@monaco-editor/react";
 import { evaluate, type MahoragaError } from "mahoraga-js";
 import { useMemo, useState } from "react";
-import { sampleMatrix } from "./defaultMarix";
-import { type ExprError, ExprEditor } from "./ExprEditor";
-import { makeFns } from "./fns";
+import { ExprEditor, type ExprError } from "./components/ExprEditor";
+import { JsonEditor } from "./components/JsonEditor";
+import { sampleMatrix } from "./lib/defaultMarix";
+import { makeFns } from "./lib/fns";
 import sampleJson from "./sample.json?raw";
+import { SettingsBar } from "./components/SettingsBar";
 
 export type Row = { name: string; expr: string; output: boolean };
 
 // JS functions visible to expressions
 function makeCtxFns(input: Record<string, unknown>) {
-  function adder(n: number, mahoraga_closure: (n: number) => number) {
-    console.log("Hi from javascript!");
-    let result = mahoraga_closure(n);
-    console.log(`moharaga result: ${result}`);
-    return (add: number) => result + add;
-  }
-
   return {
     ...makeFns(new Date(String(input.currentDateTime))),
     substr_mapping: (key: string, input: Record<string, number>) => {
@@ -35,7 +29,6 @@ function makeCtxFns(input: Record<string, unknown>) {
         }
       }
     },
-    adder,
   };
 }
 
@@ -91,6 +84,7 @@ export default function App() {
 
   return (
     <div className="grid min-h-screen grid-cols-1 gap-4 bg-slate-50 p-4 text-sm text-slate-800 lg:grid-cols-[2fr_1fr] lg:grid-rows-[auto_24rem]">
+      <SettingsBar />
       <section className="flex min-h-0 flex-col gap-2 lg:col-span-2">
         <h2 className="font-semibold">Matrix</h2>
         <div className="flex flex-col gap-2">
@@ -166,18 +160,7 @@ export default function App() {
       <section className="flex min-h-0 flex-col gap-2">
         <h2 className="font-semibold">Input</h2>
         <div className="min-h-64 flex-1 overflow-hidden rounded border border-slate-300 bg-white">
-          <Editor
-            path="input.json"
-            language="json"
-            value={json}
-            onChange={(v) => setJson(v ?? "")}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 12,
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-            }}
-          />
+          <JsonEditor value={json} onChange={setJson} />
         </div>
         {parsed.error && <p className="text-red-600">{parsed.error}</p>}
       </section>

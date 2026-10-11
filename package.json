@@ -13,6 +13,7 @@
     "@monaco-editor/react": "^4.7.0",
     "mahoraga-js": "file:/home/dog4ik/personal/mahoraga-js/pkg",
     "monaco-editor": "^0.57.0",
+    "monaco-vim": "^0.4.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

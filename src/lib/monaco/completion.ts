@@ -46,28 +46,6 @@ function resolve(scope: Record<string, unknown>, path: FactIdent[]) {
   return cur;
 }
 
-export type PathWarning = { span: [number, number]; message: string };
-
-// Access chains rooted at a known identifier whose segment does not exist in the input
-export function unknownFields(expr: string, ctx: ExprCtx): PathWarning[] {
-  const scope = scopeOf(ctx);
-  const warnings: PathWarning[] = [];
-  for (const path of facts(expr)?.paths ?? []) {
-    if (!(path[0].name in scope)) continue;
-    for (let i = 1; i < path.length; i++) {
-      const parent = resolve(scope, path.slice(0, i));
-      if (isObject(parent) && !(path[i].name in parent)) {
-        warnings.push({
-          span: path[i].span,
-          message: `Unknown field "${path[i].name}"`,
-        });
-        break;
-      }
-    }
-  }
-  return warnings;
-}
-
 export function registerCompletion(monaco: typeof Monaco) {
   const Kind = monaco.languages.CompletionItemKind;
 

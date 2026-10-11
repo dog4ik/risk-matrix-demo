@@ -1,8 +1,9 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import { useEffect, useState } from "react";
-import { type ExprCtx, exprCtx, unknownFields } from "./monaco/completion";
-import { LANG } from "./monaco/language";
+import { type ExprCtx, exprCtx } from "../lib/monaco/completion";
+import { LANG } from "../lib/monaco/language";
+import { useVimMode } from "../lib/monaco/useVimMode";
 
 export type ExprError = { message: string; span?: [number, number] };
 
@@ -27,6 +28,7 @@ const OPTIONS: Monaco.editor.IStandaloneEditorConstructionOptions = {
   wordWrap: "on",
   automaticLayout: true,
   fixedOverflowWidgets: true,
+  wordBasedSuggestions: "off",
   fontSize: 13,
   padding: { top: 6, bottom: 6 },
 };
@@ -55,35 +57,23 @@ export function ExprEditor({ path, value, onChange, error, ctx }: Props) {
   useEffect(() => {
     if (!mounted || !model) return;
     const { monaco } = mounted;
-    const range = (start: number, end: number) => {
-      // a zero-width span would render no squiggle
-      if (end <= start) end = Math.min(start + 1, value.length);
-      if (end <= start) start = Math.max(0, end - 1);
-      const s = model.getPositionAt(start);
-      const e = model.getPositionAt(end);
-      return {
-        startLineNumber: s.lineNumber,
-        startColumn: s.column,
-        endLineNumber: e.lineNumber,
-        endColumn: e.column,
-      };
-    };
-    const markers: Monaco.editor.IMarkerData[] = unknownFields(value, ctx).map(
-      (w) => ({
-        severity: monaco.MarkerSeverity.Warning,
-        message: w.message,
-        ...range(...w.span),
-      }),
-    );
+    const markers: Monaco.editor.IMarkerData[] = [];
     if (error) {
+      const [start, end] = error.span ?? [0, value.length];
+      // monaco widens an empty range to the word at that position
       markers.push({
         severity: monaco.MarkerSeverity.Error,
         message: error.message,
-        ...range(...(error.span ?? [0, value.length])),
+        ...monaco.Range.fromPositions(
+          model.getPositionAt(start),
+          model.getPositionAt(end),
+        ),
       });
     }
     monaco.editor.setModelMarkers(model, LANG, markers);
-  }, [mounted, model, value, error, ctx]);
+  }, [mounted, model, value, error]);
+
+  useVimMode(mounted?.editor);
 
   return (
     <div
