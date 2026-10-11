@@ -22,8 +22,7 @@ export function makeFns(now: Date) {
     step: (x: number, thresholds: number[], scores: number[]) =>
       scores[thresholds.filter((t) => num(x) >= t).length],
 
-    decay: (days: number, halfLife: number) =>
-      Math.pow(0.5, num(days) / halfLife),
+    decay: (days: number, halfLife: number) => 0.5 ** (num(days) / halfLife),
 
     contains: (s: string, sub: string) =>
       String(s ?? "")

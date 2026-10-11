@@ -1,27 +1,66 @@
-import { evaluate } from "mahoraga-js";
+import Editor from "@monaco-editor/react";
+import { evaluate, type MahoragaError } from "mahoraga-js";
 import { useMemo, useState } from "react";
 import { sampleMatrix } from "./defaultMarix";
+import { type ExprError, ExprEditor } from "./ExprEditor";
 import { makeFns } from "./fns";
 import sampleJson from "./sample.json?raw";
 
 export type Row = { name: string; expr: string; output: boolean };
 
-function run(input: Record<string, unknown>, rows: Row[]) {
-  const ctx = { ...input, ...makeFns(new Date(String(input.currentDateTime))) };
+// JS functions visible to expressions
+function makeCtxFns(input: Record<string, unknown>) {
+  function adder(n: number, mahoraga_closure: (n: number) => number) {
+    console.log("Hi from javascript!");
+    let result = mahoraga_closure(n);
+    console.log(`moharaga result: ${result}`);
+    return (add: number) => result + add;
+  }
+
+  return {
+    ...makeFns(new Date(String(input.currentDateTime))),
+    substr_mapping: (key: string, input: Record<string, number>) => {
+      if (typeof input !== "object") {
+        throw Error("argument should be object");
+      }
+      if (typeof key !== "string") {
+        throw Error("second argument should string");
+      }
+      key = key.toLowerCase();
+
+      let keys = Object.keys(input).sort((a, b) => b.length - a.length);
+      for (const mappingKey of keys) {
+        if (key.includes(mappingKey.toLowerCase())) {
+          return input[mappingKey];
+        }
+      }
+    },
+    adder,
+  };
+}
+
+function run(
+  input: Record<string, unknown>,
+  fns: ReturnType<typeof makeCtxFns>,
+  rows: Row[],
+) {
+  const ctx = { ...input, ...fns };
   // every row's value, visible to later rows as `prev_risks`
   const risks: Record<string, number> = {};
   // only rows marked as output
   const out: Record<string, number> = {};
-  const errors: Record<number, string> = {};
+  const errors: Record<number, ExprError> = {};
   rows.forEach((r, i) => {
     try {
       const v = evaluate(r.expr, { ...ctx, prev_risks: { ...risks } });
       risks[r.name] = v == null ? 0 : Number(v);
     } catch (e) {
-      const err = e as Error & { help?: string | null };
+      const err = e as Partial<MahoragaError> & Error;
       risks[r.name] = 0;
-      errors[i] =
-        `${err.name}: ${err.message}${err.help ? ` (${err.help})` : ""}`;
+      errors[i] = {
+        message: `${err.name}: ${err.message}${err.help ? ` (${err.help})` : ""}`,
+        span: err.span,
+      };
     }
     if (r.output) out[r.name] = risks[r.name];
   });
@@ -41,9 +80,10 @@ export default function App() {
     }
   }, [json]);
 
+  const fns = useMemo(() => makeCtxFns(parsed.input), [parsed]);
   const { risks, out, errors, total } = useMemo(
-    () => run(parsed.input, rows),
-    [parsed, rows],
+    () => run(parsed.input, fns, rows),
+    [parsed, fns, rows],
   );
 
   const update = (i: number, patch: Partial<Row>) =>
@@ -56,6 +96,7 @@ export default function App() {
         <div className="flex flex-col gap-2">
           {rows.map((r, i) => (
             <div
+              // biome-ignore lint: Let it be, i forgot why it is bad thing to do
               key={i}
               className="flex items-start gap-3 rounded border border-slate-300 bg-white p-2"
             >
@@ -72,14 +113,23 @@ export default function App() {
                 </span>
               </div>
               <div className="flex min-w-0 flex-1 flex-col">
-                <textarea
-                  className="field-sizing-content min-h-16 w-full resize-y rounded border border-slate-300 p-2 font-mono"
+                <ExprEditor
+                  path={`row-${i}.mhr`}
                   value={r.expr}
-                  onChange={(e) => update(i, { expr: e.target.value })}
-                  spellCheck={false}
+                  onChange={(expr) => update(i, { expr })}
+                  error={errors[i]}
+                  ctx={{
+                    input: parsed.input,
+                    fns,
+                    prevRisks: Object.fromEntries(
+                      rows.slice(0, i).map((p) => [p.name, risks[p.name]]),
+                    ),
+                  }}
                 />
                 {errors[i] && (
-                  <p className="mt-1 text-xs text-red-600">{errors[i]}</p>
+                  <p className="mt-1 text-xs text-red-600">
+                    {errors[i].message}
+                  </p>
                 )}
               </div>
               <input
@@ -115,12 +165,20 @@ export default function App() {
 
       <section className="flex min-h-0 flex-col gap-2">
         <h2 className="font-semibold">Input</h2>
-        <textarea
-          className="min-h-64 flex-1 rounded border border-slate-300 bg-white p-2 font-mono text-xs"
-          value={json}
-          onChange={(e) => setJson(e.target.value)}
-          spellCheck={false}
-        />
+        <div className="min-h-64 flex-1 overflow-hidden rounded border border-slate-300 bg-white">
+          <Editor
+            path="input.json"
+            language="json"
+            value={json}
+            onChange={(v) => setJson(v ?? "")}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 12,
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+            }}
+          />
+        </div>
         {parsed.error && <p className="text-red-600">{parsed.error}</p>}
       </section>
 
