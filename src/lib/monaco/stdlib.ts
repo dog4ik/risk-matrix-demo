@@ -76,4 +76,12 @@ export const STDLIB: Record<string, { sig: string; doc: string }> = {
     sig: "filter(array, |x| ...)",
     doc: "Filter elements of the array",
   },
+  find_map: {
+    sig: "find_map(array, |x| ...)",
+    doc: "Find and transform elements in the array",
+  },
+  find: {
+    sig: "find(array, |x| ...)",
+    doc: "Find elements of the array",
+  },
 };
