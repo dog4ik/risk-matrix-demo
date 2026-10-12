@@ -10,12 +10,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
+    "@fontsource-variable/geist": "^5.3.0",
     "@monaco-editor/react": "^4.7.0",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.4.0",
+    "lucide-react": "^1.55.0",
     "mahoraga-js": "file:/home/dog4ik/personal/mahoraga-js/pkg",
     "monaco-editor": "^0.57.0",
     "monaco-vim": "^0.4.4",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "recharts": "^3.8.0",
+    "shadcn": "^4.21.4",
+    "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

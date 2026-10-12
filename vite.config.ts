@@ -24,6 +24,10 @@ export default defineConfig({
         find: /^monaco-editor\/esm\/vs\//,
         replacement: nodeModule("monaco-editor/esm/vs/"),
       },
+      {
+        find: /^@\//,
+        replacement: fileURLToPath(new URL("./src/", import.meta.url)),
+      },
     ],
   },
   optimizeDeps: { exclude: ["mahoraga-js"] },

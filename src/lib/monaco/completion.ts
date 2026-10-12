@@ -5,8 +5,8 @@ import { STDLIB } from "./stdlib";
 
 export type ExprCtx = {
   input: Record<string, unknown>;
-  // values of the rows above, visible as `prev_risks`
-  prevRisks: Record<string, number>;
+  // values of the fields this one can see, visible as `prev_risks`
+  prevRisks: Record<string, unknown>;
   // JS functions passed to evaluate
   fns: Record<string, (...args: any[]) => unknown>;
 };

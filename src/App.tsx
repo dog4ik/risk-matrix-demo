@@ -1,13 +1,17 @@
 import { evaluate, type MahoragaError } from "mahoraga-js";
 import { useMemo, useState } from "react";
-import { ExprEditor, type ExprError } from "./components/ExprEditor";
+import type { ExprError } from "./components/ExprEditor";
 import { JsonEditor } from "./components/JsonEditor";
-import { sampleMatrix } from "./lib/defaultMarix";
+import { Section } from "./components/Section";
+import { SettingsBar } from "./components/SettingsBar";
+import { overallRisk, uiIndicators } from "./lib/defaultMarix";
 import { makeFns } from "./lib/fns";
 import sampleJson from "./sample.json?raw";
-import { SettingsBar } from "./components/SettingsBar";
 
-export type Row = { name: string; expr: string; output: boolean };
+export type Field = { key: string; label: string; expr: string };
+
+export type Fns = ReturnType<typeof makeCtxFns>;
+export type SectionResult = ReturnType<typeof evalSection>;
 
 // JS functions visible to expressions
 function makeCtxFns(input: Record<string, unknown>) {
@@ -32,38 +36,42 @@ function makeCtxFns(input: Record<string, unknown>) {
   };
 }
 
-function run(
+function evalSection(
   input: Record<string, unknown>,
-  fns: ReturnType<typeof makeCtxFns>,
-  rows: Row[],
+  fns: Fns,
+  fields: Field[],
+  seen: Record<string, unknown>,
 ) {
   const ctx = { ...input, ...fns };
-  // every row's value, visible to later rows as `prev_risks`
-  const risks: Record<string, number> = {};
-  // only rows marked as output
-  const out: Record<string, number> = {};
+  const values: Record<string, unknown> = {};
+  const visible: Record<string, unknown>[] = [];
   const errors: Record<number, ExprError> = {};
-  rows.forEach((r, i) => {
+  fields.forEach((f, i) => {
+    const prev = { ...seen, ...values };
+    visible.push(prev);
+    values[f.key] = undefined;
+    if (!f.expr.trim()) return;
     try {
-      const v = evaluate(r.expr, { ...ctx, prev_risks: { ...risks } });
-      risks[r.name] = v == null ? 0 : Number(v);
+      values[f.key] = evaluate(f.expr, { ...ctx, prev_risks: prev });
     } catch (e) {
       const err = e as Partial<MahoragaError> & Error;
-      risks[r.name] = 0;
       errors[i] = {
         message: `${err.name}: ${err.message}${err.help ? ` (${err.help})` : ""}`,
         span: err.span,
       };
     }
-    if (r.output) out[r.name] = risks[r.name];
   });
-  const total = Object.values(out).reduce((a, b) => a + b, 0);
-  return { risks, out, errors, total };
+  return { values, visible, errors };
 }
+
+// void and null both become null in the output
+const toJson = (values: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v ?? null]));
 
 export default function App() {
   const [json, setJson] = useState(sampleJson);
-  const [rows, setRows] = useState(sampleMatrix);
+  const [indicators, setIndicators] = useState(uiIndicators);
+  const [overall, setOverall] = useState(overallRisk);
 
   const parsed = useMemo(() => {
     try {
@@ -74,88 +82,46 @@ export default function App() {
   }, [json]);
 
   const fns = useMemo(() => makeCtxFns(parsed.input), [parsed]);
-  const { risks, out, errors, total } = useMemo(
-    () => run(parsed.input, fns, rows),
-    [parsed, fns, rows],
+  const indicatorsResult = useMemo(
+    () => evalSection(parsed.input, fns, indicators, {}),
+    [parsed, fns, indicators],
+  );
+  // overall risks see every ui indicator
+  const overallResult = useMemo(
+    () => evalSection(parsed.input, fns, overall, indicatorsResult.values),
+    [parsed, fns, overall, indicatorsResult],
   );
 
-  const update = (i: number, patch: Partial<Row>) =>
-    setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const out = {
+    ui_indicators: toJson(indicatorsResult.values),
+    overall_risk: toJson(overallResult.values),
+  };
+
+  const setExpr =
+    (fields: Field[], set: (f: Field[]) => void) => (i: number, expr: string) =>
+      set(fields.map((f, j) => (j === i ? { ...f, expr } : f)));
 
   return (
-    <div className="grid min-h-screen grid-cols-1 gap-4 bg-slate-50 p-4 text-sm text-slate-800 lg:grid-cols-[2fr_1fr] lg:grid-rows-[auto_24rem]">
+    <div className="grid min-h-screen grid-cols-1 gap-4 bg-slate-50 p-4 text-sm text-slate-800 lg:grid-cols-[2fr_1fr] lg:grid-rows-[auto_auto_auto_24rem]">
       <SettingsBar />
-      <section className="flex min-h-0 flex-col gap-2 lg:col-span-2">
-        <h2 className="font-semibold">Matrix</h2>
-        <div className="flex flex-col gap-2">
-          {rows.map((r, i) => (
-            <div
-              // biome-ignore lint: Let it be, i forgot why it is bad thing to do
-              key={i}
-              className="flex items-start gap-3 rounded border border-slate-300 bg-white p-2"
-            >
-              <div className="flex w-56 shrink-0 flex-col gap-1">
-                <input
-                  className="rounded border border-slate-300 px-1 py-0.5 font-medium"
-                  value={r.name}
-                  onChange={(e) => update(i, { name: e.target.value })}
-                />
-                <span
-                  className={`font-mono text-lg ${errors[i] || Number.isNaN(risks[r.name]) ? "text-red-600" : ""}`}
-                >
-                  = {String(risks[r.name])}
-                </span>
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <ExprEditor
-                  path={`row-${i}.mhr`}
-                  value={r.expr}
-                  onChange={(expr) => update(i, { expr })}
-                  error={errors[i]}
-                  ctx={{
-                    input: parsed.input,
-                    fns,
-                    prevRisks: Object.fromEntries(
-                      rows.slice(0, i).map((p) => [p.name, risks[p.name]]),
-                    ),
-                  }}
-                />
-                {errors[i] && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {errors[i].message}
-                  </p>
-                )}
-              </div>
-              <input
-                type="checkbox"
-                title="Include in output"
-                className="mt-1"
-                checked={r.output}
-                onChange={(e) => update(i, { output: e.target.checked })}
-              />
-              <button
-                type="button"
-                className="text-slate-400 hover:text-red-600"
-                onClick={() => setRows(rows.filter((_, j) => j !== i))}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="self-start rounded bg-slate-800 px-3 py-1 text-white hover:bg-slate-700"
-          onClick={() =>
-            setRows([
-              ...rows,
-              { name: `metric_${rows.length + 1}`, expr: "0", output: true },
-            ])
-          }
-        >
-          Add row
-        </button>
-      </section>
+      <Section
+        title="UI indicators"
+        id="ui"
+        fields={indicators}
+        result={indicatorsResult}
+        input={parsed.input}
+        fns={fns}
+        onChange={setExpr(indicators, setIndicators)}
+      />
+      <Section
+        title="Overall risk"
+        id="overall"
+        fields={overall}
+        result={overallResult}
+        input={parsed.input}
+        fns={fns}
+        onChange={setExpr(overall, setOverall)}
+      />
 
       <section className="flex min-h-0 flex-col gap-2">
         <h2 className="font-semibold">Input</h2>
@@ -167,10 +133,6 @@ export default function App() {
 
       <section className="flex min-h-0 flex-col gap-2">
         <h2 className="font-semibold">Output</h2>
-        <div className="rounded border border-slate-300 bg-white p-3">
-          <div className="text-xs text-slate-500">Total risk score</div>
-          <div className="text-3xl font-bold">{total.toFixed(2)}</div>
-        </div>
         <pre className="flex-1 overflow-auto rounded border border-slate-300 bg-white p-2 font-mono text-xs">
           {JSON.stringify(out, null, 2)}
         </pre>
