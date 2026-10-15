@@ -16,7 +16,7 @@
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.55.0",
-    "mahoraga-js": "file:/home/dog4ik/personal/mahoraga-js/pkg",
+    "mahoraga-js": "0.3.0",
     "monaco-editor": "^0.57.0",
     "monaco-vim": "^0.4.4",
     "react": "^19.2.8",
