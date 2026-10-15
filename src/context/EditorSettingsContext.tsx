@@ -18,7 +18,7 @@ export function EditorSettingsContextProvider({
 }: {
   children: ReactNode;
 }) {
-  let [value, setValue] = useState<EditorSettings>({ vimMode: true });
+  let [value, setValue] = useState<EditorSettings>({ vimMode: false });
   return (
     <context.Provider value={{ settings: value, setSettings: setValue }}>
       {children}
