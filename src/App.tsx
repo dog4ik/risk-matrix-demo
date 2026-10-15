@@ -1,10 +1,12 @@
-import { evaluate, type MahoragaError } from "mahoraga-js";
+import { Engine, type MahoragaError } from "mahoraga-js";
 import { useMemo, useState } from "react";
 import type { ExprError } from "./components/ExprEditor";
 import { JsonEditor } from "./components/JsonEditor";
 import { Section } from "./components/Section";
 import { SettingsBar } from "./components/SettingsBar";
+import { EngineContext } from "./context/EngineContext";
 import { overallRisk, uiIndicators } from "./lib/defaultMarix";
+import { evaluateField } from "./lib/engine";
 import { makeFns } from "./lib/fns";
 import sampleJson from "./sample.json?raw";
 
@@ -37,12 +39,10 @@ function makeCtxFns(input: Record<string, unknown>) {
 }
 
 function evalSection(
-  input: Record<string, unknown>,
-  fns: Fns,
+  engine: Engine,
   fields: Field[],
   seen: Record<string, unknown>,
 ) {
-  const ctx = { ...input, ...fns };
   const values: Record<string, unknown> = {};
   const visible: Record<string, unknown>[] = [];
   const errors: Record<number, ExprError> = {};
@@ -52,7 +52,7 @@ function evalSection(
     values[f.key] = undefined;
     if (!f.expr.trim()) return;
     try {
-      values[f.key] = evaluate(f.expr, { ...ctx, prev_risks: prev });
+      values[f.key] = evaluateField(engine, f.expr, prev);
     } catch (e) {
       const err = e as Partial<MahoragaError> & Error;
       errors[i] = {
@@ -82,14 +82,18 @@ export default function App() {
   }, [json]);
 
   const fns = useMemo(() => makeCtxFns(parsed.input), [parsed]);
+  const engine = useMemo(
+    () => new Engine({ ...parsed.input, ...fns }),
+    [parsed, fns],
+  );
   const indicatorsResult = useMemo(
-    () => evalSection(parsed.input, fns, indicators, {}),
-    [parsed, fns, indicators],
+    () => evalSection(engine, indicators, {}),
+    [engine, indicators],
   );
   // overall risks see every ui indicator
   const overallResult = useMemo(
-    () => evalSection(parsed.input, fns, overall, indicatorsResult.values),
-    [parsed, fns, overall, indicatorsResult],
+    () => evalSection(engine, overall, indicatorsResult.values),
+    [engine, overall, indicatorsResult],
   );
 
   const out = {
@@ -102,41 +106,43 @@ export default function App() {
       set(fields.map((f, j) => (j === i ? { ...f, expr } : f)));
 
   return (
-    <div className="grid min-h-screen grid-cols-1 gap-4 bg-slate-50 p-4 text-sm text-slate-800 lg:grid-cols-[2fr_1fr] lg:grid-rows-[auto_auto_auto_24rem]">
-      <SettingsBar />
-      <Section
-        title="UI indicators"
-        id="ui"
-        fields={indicators}
-        result={indicatorsResult}
-        input={parsed.input}
-        fns={fns}
-        onChange={setExpr(indicators, setIndicators)}
-      />
-      <Section
-        title="Overall risk"
-        id="overall"
-        fields={overall}
-        result={overallResult}
-        input={parsed.input}
-        fns={fns}
-        onChange={setExpr(overall, setOverall)}
-      />
+    <EngineContext value={engine}>
+      <div className="grid min-h-screen grid-cols-1 gap-4 bg-slate-50 p-4 text-sm text-slate-800 lg:grid-cols-[2fr_1fr] lg:grid-rows-[auto_auto_auto_24rem]">
+        <SettingsBar />
+        <Section
+          title="UI indicators"
+          id="ui"
+          fields={indicators}
+          result={indicatorsResult}
+          input={parsed.input}
+          fns={fns}
+          onChange={setExpr(indicators, setIndicators)}
+        />
+        <Section
+          title="Overall risk"
+          id="overall"
+          fields={overall}
+          result={overallResult}
+          input={parsed.input}
+          fns={fns}
+          onChange={setExpr(overall, setOverall)}
+        />
 
-      <section className="flex min-h-0 flex-col gap-2">
-        <h2 className="font-semibold">Input</h2>
-        <div className="min-h-64 flex-1 overflow-hidden rounded border border-slate-300 bg-white">
-          <JsonEditor value={json} onChange={setJson} />
-        </div>
-        {parsed.error && <p className="text-red-600">{parsed.error}</p>}
-      </section>
+        <section className="flex min-h-0 flex-col gap-2">
+          <h2 className="font-semibold">Input</h2>
+          <div className="min-h-64 flex-1 overflow-hidden rounded border border-slate-300 bg-white">
+            <JsonEditor value={json} onChange={setJson} />
+          </div>
+          {parsed.error && <p className="text-red-600">{parsed.error}</p>}
+        </section>
 
-      <section className="flex min-h-0 flex-col gap-2">
-        <h2 className="font-semibold">Output</h2>
-        <pre className="flex-1 overflow-auto rounded border border-slate-300 bg-white p-2 font-mono text-xs">
-          {JSON.stringify(out, null, 2)}
-        </pre>
-      </section>
-    </div>
+        <section className="flex min-h-0 flex-col gap-2">
+          <h2 className="font-semibold">Output</h2>
+          <pre className="flex-1 overflow-auto rounded border border-slate-300 bg-white p-2 font-mono text-xs">
+            {JSON.stringify(out, null, 2)}
+          </pre>
+        </section>
+      </div>
+    </EngineContext>
   );
 }
