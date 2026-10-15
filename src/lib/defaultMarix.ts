@@ -126,11 +126,45 @@ const field = (key: string, label: string, expr = ""): Field => ({
 //   },
 
 export const uiIndicators: Field[] = [
-  field("company_name", "Company Name"),
-  field("company_status", "Company Status"),
-  field("registration_address", "Registration Address"),
-  field("registration_date", "Registration Date"),
-  field("activity_match", "Activity Match"),
+  // recent or frequent renames
+  field(
+    "company_name",
+    "Company Name",
+    `[
+  (days_since(ul.legalName.changeDate) ?? 99999) | step([90, 365], [50, 25, 0]),
+  len(ul.ulHistory.ulLegalNames) | step([3, 5], [0, 25, 50])
+] | max`,
+  ),
+  field(
+    "company_status",
+    "Company Status",
+    `[
+  status != "Действующее" ? 50 : 0,
+  reorganizing ? 25 : 0,
+  bankrupting || bankruptcy.isInProgress ? 85 : 0,
+  contains(bankruptcy.stage, "конкурсн") ? 100 : 0,
+  dissolving || dissolved ? 100 : 0
+] | max`,
+  ),
+  // recently moved, or no house number
+  field(
+    "registration_address",
+    "Registration Address",
+    `[
+  (days_since(ul.address.changeDate) ?? 99999) | step([90, 365], [50, 25, 0]),
+  blank_as_null(trim(ul.address.house ?? "")) == null ? 50 : 0
+] | max`,
+  ),
+  field(
+    "registration_date",
+    "Registration Date",
+    "years_since(registrationDate) + 1 | log_10 | scale(0, log_10(20 + 1), 100, 0)",
+  ),
+  field(
+    "activity_match",
+    "Activity Match",
+    "registrationDate | days_since | step([90, 180, 365], [85, 50, 25, 0])",
+  ),
 
   field("company_sanctions", "Company Sanctions"),
   field("risk_countries", "Risk Countries"),
@@ -140,8 +174,25 @@ export const uiIndicators: Field[] = [
     `len(ul.ulBeneficials.ulFlBeneficials) + len(ul.ulBeneficials.ulUlBeneficials) + len(ul.ulBeneficials.ulForeignBeneficials) == 0 ? 70 : 0`,
   ),
   field("pep_status", "PEP Status"),
-  field("business_reputation", "Business Reputation"),
-  field("fraud", "Fraud"),
+  field(
+    "business_reputation",
+    "Business Reputation",
+    `[
+  fssp.topOpenBySum | map(|e| decay(days_since(e.startDateParsed) ?? 99999, 180)) | sum | scale(0, 5, 0, 70),
+  bankruptcyArbitrationsCount | log_10 | scale(0, 3, 0, 85),
+  (days_since((ul.heads ?? [])[0].changeDate) ?? 99999) <= 90 ? 25 : 0
+] | max | round(0)`,
+  ),
+  // tax registration before the company existed, no phones, expired licenses
+  field(
+    "fraud",
+    "Fraud",
+    `[
+  (days_since(nalogDate) ?? 0) > (days_since(registrationDate) ?? 0) ? 100 : 0,
+  len(phones) == 0 ? 25 : 0,
+  len(activeLicenses | filter(|l| l.statusDescription == "Истекла")) | step([1, 10], [0, 10, 25])
+] | max`,
+  ),
 
   field("total_rejections", "Total Rejections"),
   field("sender_bank_rejections", "Sender Bank Rejections"),
@@ -151,7 +202,28 @@ export const uiIndicators: Field[] = [
 ];
 
 export const overallRisk: Field[] = [
-  field("compliance_risk", "Compliance Risk"),
-  field("reputational_risk", "Reputational Risk"),
-  field("operational_risk", "Operational Risk"),
+  field(
+    "compliance_risk",
+    "Compliance Risk",
+    `[
+  prev_risks.company_sanctions,
+  prev_risks.beneficiary_sanctions,
+  prev_risks.risk_countries,
+  prev_risks.pep_status,
+  prev_risks.activity_match
+] | max ?? 0`,
+  ),
+  field(
+    "reputational_risk",
+    "Reputational Risk",
+    `[prev_risks.business_reputation, prev_risks.fraud, prev_risks.company_status] | max ?? 0`,
+  ),
+  field(
+    "operational_risk",
+    "Operational Risk",
+    `0.4 * (prev_risks.registration_date ?? 0)
+  + 0.3 * (prev_risks.registration_address ?? 0)
+  + 0.3 * (prev_risks.company_name ?? 0)
+  | round(0)`,
+  ),
 ];

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -14,6 +15,7 @@ import {
   type NumberVizConfig,
   NumberVizConfigEditor,
 } from "./NumberViz";
+import { DATE_PRESETS, isSameConfig, NUMBER_PRESETS } from "./presets";
 import type { EvaluateEach } from "./sweep";
 
 export type DataType = "number" | "string" | "boolean" | "date";
@@ -51,6 +53,45 @@ export function DataViz({ current, evaluateEach }: Props) {
     number: defaultNumberConfig(current),
     date: defaultDateConfig(current),
   }));
+
+  const presets = () => {
+    switch (type) {
+      case "number":
+        return NUMBER_PRESETS.map((p) => {
+          const config = p.config();
+          return (
+            <Button
+              key={p.label}
+              size="xs"
+              variant={
+                isSameConfig(config, configs.number) ? "secondary" : "outline"
+              }
+              onClick={() => setConfigs({ ...configs, number: config })}
+            >
+              {p.label}
+            </Button>
+          );
+        });
+      case "date":
+        return DATE_PRESETS.map((p) => {
+          const config = p.config();
+          return (
+            <Button
+              key={p.label}
+              size="xs"
+              variant={
+                isSameConfig(config, configs.date) ? "secondary" : "outline"
+              }
+              onClick={() => setConfigs({ ...configs, date: config })}
+            >
+              {p.label}
+            </Button>
+          );
+        });
+      default:
+        return null;
+    }
+  };
 
   const body = () => {
     switch (type) {
@@ -95,7 +136,7 @@ export function DataViz({ current, evaluateEach }: Props) {
 
   return (
     <div className="flex flex-col gap-2 rounded border border-slate-200 bg-slate-50 p-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Label className="text-xs">Data type</Label>
         <Select
           items={DATA_TYPES}
@@ -113,6 +154,7 @@ export function DataViz({ current, evaluateEach }: Props) {
             ))}
           </SelectContent>
         </Select>
+        {presets()}
         <span className="ml-auto font-mono text-xs text-slate-500">
           current = {current === undefined ? "void" : JSON.stringify(current)}
         </span>
